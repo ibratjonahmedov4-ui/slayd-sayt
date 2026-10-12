@@ -192,10 +192,10 @@ function motif(id,a){
 }
 function art(id,i,ac){
  var a="#"+ac,x=[60,330,200][i%3],y=[50,240,270][i%3];
- return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect width="400" height="300" rx="18" fill="'+a+'" fill-opacity=".12"/><circle cx="'+x+'" cy="'+y+'" r="70" fill="'+a+'" fill-opacity=".15"/>'+motif(id,a)+'</svg>';
+ return '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 400 300"><rect width="400" height="300" rx="18" fill="'+a+'" fill-opacity=".12"/><circle cx="'+x+'" cy="'+y+'" r="70" fill="'+a+'" fill-opacity=".15"/>'+motif(id,a)+'</svg>';
 }
 function svgUrl(s){return "data:image/svg+xml;charset=utf-8,"+encodeURIComponent(s)}
-function loadImg(u){return new Promise(function(res,rej){var m=new Image();m.onload=function(){res(m)};m.onerror=rej;m.src=u})}
+function loadImg(u){return new Promise(function(res,rej){var m=new Image(),t=setTimeout(function(){rej(new Error("rasm yuklanmadi"))},4000);m.onload=function(){clearTimeout(t);res(m)};m.onerror=function(){clearTimeout(t);rej(new Error("rasm xato"))};m.src=u})}
 async function toPng(u){var m=await loadImg(u),c=document.createElement("canvas");c.width=800;c.height=600;
  var x=c.getContext("2d");x.drawImage(m,0,0,800,600);return c.toDataURL("image/png")}
 async function shrink(file){
@@ -289,7 +289,7 @@ function render(){
 }
 
 async function download(){
- if(!slides.length)return;$("msg2").textContent="Fayl tayyorlanmoqda...";
+ if(!slides.length)return;if(!window.PptxGenJS){$("msg2").textContent="PowerPoint kutubxonasi yuklanmadi. Internetni tekshirib, sahifani yangilang (F5).";return}$("msg2").textContent="Fayl tayyorlanmoqda...";
  try{
   var p=new PptxGenJS();p.layout="LAYOUT_16x9";var F="Calibri";
   for(var i=0;i<slides.length;i++){
@@ -318,7 +318,7 @@ async function download(){
      var bw=3.4,bh=2.55,r=s.img.w/s.img.h,w=bw,h=bw/r;if(h>bh){h=bh;w=bh*r}
      sl.addImage({data:s.img.url.replace(/^data:/,""),x:6.2+(bw-w)/2,y:1.6+(bh-h)/2,w:w,h:h});
     }else{
-     var png=await toPng(pu);sl.addImage({data:png.replace(/^data:/,""),x:6.2,y:1.6,w:3.4,h:2.55});
+     try{var png=await toPng(pu);sl.addImage({data:png.replace(/^data:/,""),x:6.2,y:1.6,w:3.4,h:2.55})}catch(ie){}
     }
    }
   }
@@ -327,7 +327,7 @@ async function download(){
   if(!dl){$("msg2").textContent="Yuklab olish bu yerda mavjud emas.";return}
   await dl.save({filename:(slides[0].title||"slayd").replace(/[\\\/:*?"<>|]/g,"").slice(0,60)+".pptx",data:buf});
   $("msg2").textContent="Fayl saqlandi.";
- }catch(e){$("msg2").textContent=e&&e.code==="declined"?"Yuklab olish bekor qilindi.":"Faylni yuklab bo'lmadi."}
+ }catch(e){$("msg2").textContent=e&&e.code==="declined"?"Yuklab olish bekor qilindi.":"Faylni yuklab bo'lmadi: "+((e&&e.message)||e)}
 }
 
 
@@ -448,7 +448,7 @@ async function dlRef(){
    p.t.split(p.list?/\n/:/\n\s*\n/).forEach(function(x){if(x.trim())ch.push(dp(x.trim(),{n:!!p.list}))})});
   var doc=new D.Document({sections:[{properties:{page:{size:{width:11906,height:16838},margin:{top:1134,right:850,bottom:1134,left:1701}}},children:ch}]});
   await dl.save({filename:nm+".docx",data:await D.Packer.toBlob(doc)});$("rm").textContent="Fayl saqlandi.";
- }catch(e){$("rm").textContent=e&&e.code==="declined"?"Yuklab olish bekor qilindi.":"Faylni yuklab bo'lmadi."}}
+ }catch(e){$("rm").textContent=e&&e.code==="declined"?"Yuklab olish bekor qilindi.":"Faylni yuklab bo'lmadi: "+((e&&e.message)||e)}}
 
 /* ===== ustozlar: darsliklar va qarorlar (egasi qo'shadi) ===== */
 var ITEMS=[],isOwn=false,dbh=null,fl={tx:"Hammasi",lw:"Hammasi"};
