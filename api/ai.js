@@ -14,13 +14,10 @@ module.exports = async function (req, res) {
   if (!token) return res.status(401).json({ error: "no_token" });
   const SB_URL = process.env.SUPABASE_URL || "https://etjjqwaskuvnxputunyi.supabase.co";
   const SB_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || "sb_publishable_rkeCvnQPvf-hALMp3LJNCA_mQ-ic6ES";
+  // Tokenning haqiqiyligini Supabase o'zi quyida (app_ai_take) tekshiradi; bu yerda faqat cheklov kaliti uchun o'qiymiz
   let uid = "";
-  try {
-    const u = await fetch(SB_URL + "/auth/v1/user", { headers: { apikey: SB_KEY, Authorization: "Bearer " + token } });
-    if (!u.ok) { let d = ""; try { d = (await u.text()).slice(0, 200); } catch (e) {} return res.status(401).json({ error: "bad_token", status: u.status, detail: d }); }
-    uid = String((await u.json()).id || "");
-  } catch (e) { return res.status(502).json({ error: "auth_down" }); }
-  if (!uid) return res.status(401).json({ error: "auth" });
+  try { uid = String(JSON.parse(Buffer.from(token.split(".")[1], "base64").toString("utf8")).sub || ""); } catch (e) {}
+  if (!uid) uid = token.slice(-24);
 
   // oddiy himoya: bitta foydalanuvchidan daqiqasiga 20 ta so'rov
   const now = Date.now();
@@ -41,7 +38,14 @@ module.exports = async function (req, res) {
       headers: { apikey: SB_KEY, Authorization: "Bearer " + token, "Content-Type": "application/json" },
       body: "{}",
     });
-    if (!t.ok) return res.status(502).json({ error: "quota_check" });
+    if (t.status === 401 || t.status === 403) {
+      let d = ""; try { d = (await t.text()).slice(0, 200); } catch (e) {}
+      return res.status(401).json({ error: "bad_token", status: t.status, detail: d });
+    }
+    if (!t.ok) {
+      let d = ""; try { d = (await t.text()).slice(0, 200); } catch (e) {}
+      return res.status(502).json({ error: "quota_check", status: t.status, detail: d });
+    }
     if ((await t.json()) !== true) return res.status(402).json({ error: "no_quota" });
   } catch (e) { return res.status(502).json({ error: "quota_check" }); }
 
