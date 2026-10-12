@@ -12,8 +12,8 @@ module.exports = async function (req, res) {
   const auth = String(req.headers.authorization || "");
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   if (!token) return res.status(401).json({ error: "no_token" });
-  const SB_URL = process.env.SUPABASE_URL || "https://etjjqwaskuvnxputunyi.supabase.co";
-  const SB_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || "sb_publishable_rkeCvnQPvf-hALMp3LJNCA_mQ-ic6ES";
+  const SB_URL = "https://etjjqwaskuvnxputunyi.supabase.co";
+  const SB_KEY = "sb_publishable_rkeCvnQPvf-hALMp3LJNCA_mQ-ic6ES";
   // Tokenning haqiqiyligini Supabase o'zi quyida (app_ai_take) tekshiradi; bu yerda faqat cheklov kaliti uchun o'qiymiz
   let uid = "";
   try { uid = String(JSON.parse(Buffer.from(token.split(".")[1], "base64").toString("utf8")).sub || ""); } catch (e) {}
