@@ -8,13 +8,26 @@ module.exports = async function (req, res) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return res.status(500).json({ error: "no_key" });
 
-  // oddiy himoya: bitta IP dan daqiqasiga 20 ta so'rov
-  const ip = String(req.headers["x-forwarded-for"] || "x").split(",")[0].trim();
+  // faqat kirgan foydalanuvchilar: Supabase tokenini tekshiramiz
+  const auth = String(req.headers.authorization || "");
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!token) return res.status(401).json({ error: "auth" });
+  const SB_URL = process.env.SUPABASE_URL || "https://etjjqwaskuvnxputunyi.supabase.co";
+  const SB_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || "sb_publishable_rkeCvnQPvf-hALMp3LJNCA_mQ-ic6ES";
+  let uid = "";
+  try {
+    const u = await fetch(SB_URL + "/auth/v1/user", { headers: { apikey: SB_KEY, Authorization: "Bearer " + token } });
+    if (!u.ok) return res.status(401).json({ error: "auth" });
+    uid = String((await u.json()).id || "");
+  } catch (e) { return res.status(502).json({ error: "auth_down" }); }
+  if (!uid) return res.status(401).json({ error: "auth" });
+
+  // oddiy himoya: bitta foydalanuvchidan daqiqasiga 20 ta so'rov
   const now = Date.now();
-  const arr = (hits.get(ip) || []).filter((t) => now - t < 60000);
+  const arr = (hits.get(uid) || []).filter((t) => now - t < 60000);
   if (arr.length >= 20) return res.status(429).json({ error: "rate_limited" });
   arr.push(now);
-  hits.set(ip, arr);
+  hits.set(uid, arr);
 
   let b = req.body;
   if (typeof b === "string") { try { b = JSON.parse(b); } catch (e) { b = {}; } }
