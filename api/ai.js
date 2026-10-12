@@ -11,13 +11,13 @@ module.exports = async function (req, res) {
   // faqat kirgan foydalanuvchilar: Supabase tokenini tekshiramiz
   const auth = String(req.headers.authorization || "");
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  if (!token) return res.status(401).json({ error: "auth" });
+  if (!token) return res.status(401).json({ error: "no_token" });
   const SB_URL = process.env.SUPABASE_URL || "https://etjjqwaskuvnxputunyi.supabase.co";
   const SB_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || "sb_publishable_rkeCvnQPvf-hALMp3LJNCA_mQ-ic6ES";
   let uid = "";
   try {
     const u = await fetch(SB_URL + "/auth/v1/user", { headers: { apikey: SB_KEY, Authorization: "Bearer " + token } });
-    if (!u.ok) return res.status(401).json({ error: "auth" });
+    if (!u.ok) { let d = ""; try { d = (await u.text()).slice(0, 200); } catch (e) {} return res.status(401).json({ error: "bad_token", status: u.status, detail: d }); }
     uid = String((await u.json()).id || "");
   } catch (e) { return res.status(502).json({ error: "auth_down" }); }
   if (!uid) return res.status(401).json({ error: "auth" });
