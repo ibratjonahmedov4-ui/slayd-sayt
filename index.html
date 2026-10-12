@@ -82,12 +82,13 @@ h3{margin:22px 0 10px}
 <p style="color:var(--mut);margin:4px 0 14px">Slayd va referatlarni yasash uchun kiring. Har oyda 3 tasi bepul.</p>
 <label for="rn">Ismingiz</label><input id="rn" maxlength="60" placeholder="Ism familiya">
 <label for="rph" style="margin-top:10px">Telefon raqami</label><input id="rph" maxlength="20" placeholder="+998 90 123 45 67" inputmode="tel">
+<label for="rpw" style="margin-top:10px">Parol (kamida 6 ta belgi)</label><input id="rpw" type="password" maxlength="60" placeholder="Parol" autocomplete="current-password">
 <div id="rerr" style="color:#ff8a8a;min-height:1.3em;margin-top:8px"></div>
 <button id="rgoB" style="margin-top:6px;width:100%">Kirish / Ro'yxatdan o'tish</button>
-<p class="note">Hozircha ma'lumotlar shu qurilmada saqlanadi (sinov versiyasi).</p>
+<p class="note">Yangi bo'lsangiz ism, telefon va parol kiriting. Allaqachon ro'yxatdan o'tgan bo'lsangiz, telefon va parolingiz yetarli.</p>
 </div></div>
 <header class="nav"><div class="nb"><b class="logo">📊 SlaydUz</b>
-<button class="nv on" data-v="vSlide">Slayd</button><button class="nv" data-v="vRef">Referat</button><button class="nv" data-v="vTxt">Darsliklar</button><button class="nv" data-v="vLaw">Qarorlar</button><button class="nv" data-v="vBooks">Kitoblar</button><button class="nv" data-v="vTar">Tariflar</button>
+<button class="nv on" data-v="vSlide">Slayd</button><button class="nv" data-v="vRef">Referat</button><button class="nv" data-v="vTxt">Darsliklar</button><button class="nv" data-v="vLaw">Qarorlar</button><button class="nv" data-v="vBooks">Kitoblar</button><button class="nv" data-v="vHist">Tarix</button><button class="nv" data-v="vTar">Tariflar</button>
 <span class="u"><span id="uInfo"></span><button class="sec sm" id="outB">Chiqish</button></span></div>
 <div class="chips" id="chips"></div></header>
 
@@ -131,17 +132,20 @@ h3{margin:22px 0 10px}
 <div class="card"><input id="bq" placeholder="Kitob yoki muallifni qidiring..."><div class="chips" id="bcats" style="padding:10px 0 0"></div></div>
 <div class="bgrid" id="bgrid"></div>
 <p class="note">Hozircha ro'yxat ko'rsatilgan. Kitoblarni o'qish va yuklash keyingi bosqichda, ruxsati aniq asarlar bilan qo'shiladi.</p></div>
+<div id="vHist" class="hide"><div class="top"><h1>Tarix</h1></div><div id="hlist"></div></div>
 <div id="vTar" class="hide"><div class="top"><h1>Tariflar va balans</h1></div>
 <div class="card" id="bal"></div><div class="tg" id="tgrid"></div><div id="tmsg" class="note"></div></div>
 </main>
 <footer class="ft"><b style="color:var(--tx)">Bizga bog'lanish</b><br>Telegram: <a id="ftg" target="_blank" rel="noopener"></a> &nbsp;·&nbsp; Telefon: <a id="fph"></a></footer>
 <input type="file" id="file" accept="image/*" class="hide">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js"></script>
 <script>
 /* Mustaqil rejim: Claude o'rniga /api/ai (Gemini), brauzer saqlash va oddiy yuklab olish */
 (function(){
- function post(p,j){return fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:p,json:!!j})})
+ function post(p,j){return (window.SB?SB.auth.getSession():Promise.resolve({data:{}})).then(function(s){var t=s&&s.data&&s.data.session?s.data.session.access_token:"";
+  return fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+t},body:JSON.stringify({prompt:p,json:!!j})})})
   .then(function(r){return r.json().catch(function(){return{}}).then(function(d){if(!r.ok){var e=new Error(d.error||"xato");e.code=r.status===429?"rate_limited":"error";throw e}return d})})}
  var sample=function(p){return post(typeof p==="string"?p:JSON.stringify(p),false).then(function(d){return{text:d.text,truncated:false}})};
  sample.json=function(p){return post(p,true).then(function(d){var t=String(d.text||"").replace(/```json|```/g,"").trim();
@@ -222,7 +226,7 @@ function errText(e){return e&&e.code==="rate_limited"?"Ko'p so'rov yuborildi, bi
 async function send(){
  var v=$("inp").value.trim();if(!v||busy)return;
  var sm=await getSample();if(!sm)return;
- $("inp").value="";say("u",v);if(!useMsg()){msg("Bu oy uchun AI savol-javob limiti tugadi. «Savollarsiz hoziroq yasash» tugmasini bosing yoki tarif oling.");$("nowB").disabled=false;return}$("nowB").disabled=false;busy=true;msg("AI o'ylayapti...");
+ $("inp").value="";say("u",v);if(!(await useMsg())){msg("Bu oy uchun AI savol-javob limiti tugadi. «Savollarsiz hoziroq yasash» tugmasini bosing yoki tarif oling.");$("nowB").disabled=false;return}$("nowB").disabled=false;busy=true;msg("AI o'ylayapti...");
  var turns=chat.filter(function(m){return m.r==="u"}).length;
  if(turns>=3){busy=false;generate();return}
  try{
@@ -235,7 +239,7 @@ async function send(){
 
 async function generate(){
  if(busy)return;var sm=await getSample();if(!sm)return;
- var n=clampN(),k=n-2;if(!spend("slayd"))return;busy=true;$("nowB").disabled=true;msg("Reja va matnlar yozilmoqda... ("+n+" ta slayd)");
+ var n=clampN(),k=n-2;if(!(await spend("slayd")))return;busy=true;$("nowB").disabled=true;msg("Reja va matnlar yozilmoqda... ("+n+" ta slayd)");
  var p="Quyidagi suhbat asosida taqdimot tayyorla. Bo'lim: "+sec.name+" ("+sec.hint+")\nTil: "+$("lang").value+"\nSuhbat:\n"+transcript()+
  "\n\nAniq "+k+" ta mazmun slaydi yoz (oxirgisi xulosa). Har bir slaydda 3-5 ta band, har biri to'liq, ma'noli 1 jumla (10-20 so'z), aniq faktlar bilan. Sarlavhalar qisqa va mantiqli ketma-ketlikda reja bo'lsin. Umumiy sarlavha va 1 qatorli izoh ham yoz.\nFaqat JSON: {\"title\":\"...\",\"subtitle\":\"...\",\"slides\":[{\"title\":\"...\",\"bullets\":[\"...\"]}]}";
  try{
@@ -245,7 +249,7 @@ async function generate(){
   var rl={"o'zbek (lotin)":"Reja",rus:"План",ingliz:"Agenda"}[$("lang").value];
   slides=[{kind:"title",title:String(r.title||sec.name),sub:String(r.subtitle||"")},
    {kind:"body",plan:true,title:rl,bullets:body.map(function(s,i){return (i+1)+". "+s.title})}].concat(body);
-  busy=false;msg("");$("chatView").classList.add("hide");$("resView").classList.remove("hide");drawThemes();render();
+  busy=false;msg("");saveHist("slayd",slides[0].title,{slides:slides});$("chatView").classList.add("hide");$("resView").classList.remove("hide");drawThemes();render();
   $("msg2").textContent=slides.length+" ta slayd tayyor. Dizaynni almashtiring yoki istalgan slaydga o'z rasmingizni yuklang.";
  }catch(e){busy=false;refund();$("nowB").disabled=false;msg(errText(e))}
 }
@@ -338,35 +342,67 @@ var BOOKS=[["Diniy","Qur'oni karim ma'nolarining tarjima va tafsiri","Shayx Muha
 ["Tarixiy","Boburnoma","Zahiriddin Muhammad Bobur"],["Tarixiy","Temur tuzuklari","Amir Temur"],["Tarixiy","Zafarnoma","Sharafiddin Ali Yazdiy"],["Tarixiy","Shajarayi turk","Abulg'ozi Bahodirxon"],["Tarixiy","Tarixi Rashidiy","Mirzo Muhammad Haydar"],
 ["Adabiyot","O'tkan kunlar","Abdulla Qodiriy"],["Adabiyot","Mehrobdan chayon","Abdulla Qodiriy"],["Adabiyot","Xamsa","Alisher Navoiy"],["Adabiyot","Kecha va kunduz","Cho'lpon"],["Adabiyot","Dunyoning ishlari","O'tkir Hoshimov"],["Adabiyot","Sariq devni minib","Xudoyberdi To'xtaboyev"],
 ["Ilmiy","Tib qonunlari","Abu Ali ibn Sino"],["Ilmiy","Hindiston","Abu Rayhon Beruniy"],["Ilmiy","Zij","Mirzo Ulug'bek"],["Ilmiy","Devonu lug'otit turk","Mahmud Koshg'ariy"],["Ilmiy","Qutadg'u bilig","Yusuf Xos Hojib"]];
-var mem={},acct=null,last=null,bcat="Hammasi",ref=null,VIEWS=["vSlide","vRef","vTxt","vLaw","vBooks","vTar"];
+var mem={},acct=null,last=null,bcat="Hammasi",ref=null,VIEWS=["vSlide","vRef","vTxt","vLaw","vBooks","vHist","vTar"];
 function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){if(v===undefined)return mem[k]||null;mem[k]=v}}
-function users(){try{return JSON.parse(ls("su")||"{}")}catch(e){return{}}}
-function save(){var u=users();u[acct.phone]=acct;ls("su",JSON.stringify(u));ls("sc",acct.phone);head()}
-function mkey(){var d=new Date();return d.getFullYear()+"-"+(d.getMonth()+1)}
-function roll(){if(acct.mon!==mkey()){acct.mon=mkey();acct.used=0;acct.msgs=0}if(acct.plan&&Date.now()>acct.plan.until)acct.plan=null}
+var SB=supabase.createClient("https://etjjqwaskuvnxputunyi.supabase.co","sb_publishable_rkeCvnQPvf-hALMp3LJNCA_mQ-ic6ES");
+async function rpc(fn,args){var r=await SB.rpc(fn,args||{});if(r.error){var e=new Error(r.error.message);e.code=/limit/.test(r.error.message)?"limit":/balance/.test(r.error.message)?"balance":"error";throw e}return r.data}
+function setAcct(d){acct=d;head()}
+function roll(){if(acct&&acct.plan&&Date.now()>acct.plan.until)acct.plan=null}
 function planOn(){roll();return acct.plan}
 function som(n){return n.toLocaleString("ru-RU")+" so'm"}
 function head(){if(!acct)return;var p=planOn();$("uInfo").textContent=acct.name+" · "+som(acct.bal)+(p?" · "+p.name:"")}
-function spend(kind){
- roll();var price=kind==="slayd"?CFG.pSlide:CFG.pRef,p=planOn();last=null;
- if(acct.used<CFG.free){acct.used++;last="f"}
- else if(p&&p.used<p.lim){p.used++;last="p"}
- else if(acct.bal>=price){acct.bal-=price;last=price}
- else{go("vTar");$("tmsg").textContent="Limit tugadi: bepul "+CFG.free+" ta ishlatildi va balans yetarli emas ("+som(price)+" kerak). Tarif oling yoki balansni to'ldiring.";return false}
- save();return true}
-function refund(){if(last==null)return;if(last==="f")acct.used--;else if(last==="p")acct.plan.used--;else acct.bal+=last;last=null;save()}
-function useMsg(){roll();var p=planOn(),lim=p?p.msgs:CFG.freeMsgs,c=p?p.m:acct.msgs;if(c>=lim)return false;if(p)p.m++;else acct.msgs++;save();return true}
-function login(){
- var n=$("rn").value.trim(),ph=$("rph").value.replace(/\D/g,"");
- if(n.length<2||ph.length<9){$("rerr").textContent="Ism va telefon raqamini to'g'ri kiriting.";return}
- var u=users();acct=u[ph]||{name:n,phone:ph,bal:0,plan:null,mon:mkey(),used:0,msgs:0};save();roll();
+async function spend(kind){
+ last=null;
+ try{var d=await rpc("app_spend",{p_kind:kind});last=d.last;setAcct(d.me);return true}
+ catch(e){
+  if(e.code==="limit"){var price=kind==="slayd"?CFG.pSlide:CFG.pRef;go("vTar");$("tmsg").textContent="Limit tugadi: bepul "+CFG.free+" ta ishlatildi va balans yetarli emas ("+som(price)+" kerak). Tarif oling yoki balansni to'ldiring.";try{setAcct(await rpc("app_me"))}catch(x){}}
+  else{msg(errText(e));var rm=$("rm");if(rm)rm.textContent=errText(e)}
+  return false}}
+async function refund(){if(last==null)return;last=null;try{setAcct(await rpc("app_refund"))}catch(e){}}
+async function useMsg(){try{var d=await rpc("app_use_msg");setAcct(d.me);return !!d.ok}catch(e){return false}}
+async function enter(){
+ var me=await rpc("app_me");setAcct(me);
  $("ovReg").classList.add("hide");go("vSlide");pick(SECS[6])}
-function logout(){ls("sc","");acct=null;$("rerr").textContent="";$("ovReg").classList.remove("hide")}
+async function login(){
+ var n=$("rn").value.trim(),ph=$("rph").value.replace(/\D/g,""),pw=$("rpw").value,er=$("rerr"),b=$("rgoB");
+ if(ph.length<9){er.textContent="Telefon raqamini to'g'ri kiriting.";return}
+ if(pw.length<6){er.textContent="Parol kamida 6 ta belgidan iborat bo'lsin.";return}
+ var email=ph+"@slayduz.app";b.disabled=true;er.textContent="";
+ try{
+  var r=await SB.auth.signInWithPassword({email:email,password:pw});
+  if(r.error){
+   if(!/invalid login/i.test(r.error.message)){er.textContent="Kirib bo'lmadi: "+r.error.message;b.disabled=false;return}
+   if(n.length<2){er.textContent="Telefon yoki parol noto'g'ri. Yangi bo'lsangiz, ismingizni ham yozing.";b.disabled=false;return}
+   var u=await SB.auth.signUp({email:email,password:pw,options:{data:{full_name:n,phone:ph}}});
+   if(u.error){er.textContent=/already/i.test(u.error.message)?"Bu raqam ro'yxatdan o'tgan, parol noto'g'ri.":"Ro'yxatdan o'tib bo'lmadi: "+u.error.message;b.disabled=false;return}
+   if(!u.data.session){er.textContent="Hisob yaratildi, ammo Supabase'da «Confirm email» yoqilgan. Uni o'chiring.";b.disabled=false;return}
+  }
+  await enter();
+ }catch(e){er.textContent="Xatolik yuz berdi. Qayta urinib ko'ring."}
+ b.disabled=false}
+async function logout(){await SB.auth.signOut();acct=null;slides=[];ref=null;$("rpw").value="";$("rerr").textContent="";$("ovReg").classList.remove("hide")}
+async function saveHist(kind,topic,content){try{await SB.from("history").insert({kind:kind,subject:sec?sec.name:null,topic:String(topic||"").slice(0,200),content:content})}catch(e){}}
+async function drawHist(){
+ var box=$("hlist");box.textContent="";
+ var r=await SB.from("history").select("id,kind,subject,topic,content,created_at").order("created_at",{ascending:false}).limit(50);
+ if(r.error){box.appendChild(el("p","note","Tarixni yuklab bo'lmadi."));return}
+ if(!r.data.length){box.appendChild(el("p","note","Hozircha hech narsa yaratilmagan."));return}
+ r.data.forEach(function(h){
+  var c=el("div","card");c.style.marginBottom="10px";
+  c.appendChild(el("b",null,(h.kind==="slayd"?"Slayd: ":"Referat: ")+(h.topic||"(nomsiz)")));
+  c.appendChild(el("p","note",(h.subject?h.subject+" · ":"")+new Date(h.created_at).toLocaleString("ru-RU")));
+  var o=el("button",null,"Ochish");o.onclick=function(){openHist(h)};
+  var d=el("button","sec sm","O'chirish");d.style.marginLeft="8px";var ask=false;
+  d.onclick=async function(){if(!ask){ask=true;d.textContent="Aniq o'chiraymi?";return}await SB.from("history").delete().eq("id",h.id);drawHist()};
+  c.appendChild(o);c.appendChild(d);box.appendChild(c)})}
+function openHist(h){
+ if(h.kind==="slayd"){go("vSlide");slides=(h.content&&h.content.slides)||[];$("chatView").classList.add("hide");$("resView").classList.remove("hide");drawThemes();render();$("msg2").textContent="Tarixdan ochildi."}
+ else{go("vRef");ref=h.content;showRef();$("rdl").disabled=false}}
 function go(v){
  VIEWS.forEach(function(x){$(x).classList.toggle("hide",x!==v)});
  document.querySelectorAll(".nv").forEach(function(b){b.classList.toggle("on",b.dataset.v===v)});
  $("chips").classList.toggle("hide",v!=="vSlide"&&v!=="vRef");
- if(v==="vTar")drawTar();if(v==="vBooks")drawBooks();if(v==="vTxt")drawItems("tx");if(v==="vLaw")drawItems("lw");if(v==="vRef")$("rSec").textContent=sec?sec.name:"";window.scrollTo(0,0)}
+ if(v==="vTar")drawTar();if(v==="vHist")drawHist();if(v==="vBooks")drawBooks();if(v==="vTxt")drawItems("tx");if(v==="vLaw")drawItems("lw");if(v==="vRef")$("rSec").textContent=sec?sec.name:"";window.scrollTo(0,0)}
 function markChip(){document.querySelectorAll(".chip[data-id]").forEach(function(c){c.classList.toggle("on",!!sec&&c.dataset.id===sec.id)})}
 function drawChips(){var b=$("chips");SECS.forEach(function(s){var c=el("button","chip",s.name);c.dataset.id=s.id;
  c.onclick=function(){if(!$("vRef").classList.contains("hide")){sec=s;markChip();$("rSec").textContent=s.name}else{go("vSlide");pick(s)}};b.appendChild(c)})}
@@ -380,8 +416,7 @@ function drawTar(){
  var s=el("p","note","Bepul limit: "+acct.used+"/"+CFG.free+" ta (har oy yangilanadi)  ·  AI savollari: "+(p?p.m+"/"+p.msgs:acct.msgs+"/"+CFG.freeMsgs)+
   (p?"  ·  Tarif: "+p.name+" "+p.used+"/"+p.lim+" ta, "+new Date(p.until).toLocaleDateString("ru-RU")+" gacha":"")+"\nLimitdan keyin: slayd "+som(CFG.pSlide)+", referat "+som(CFG.pRef));
  s.style.whiteSpace="pre-line";b.appendChild(s);
- b.appendChild(el("p","note","Balansni to'ldirish: Telegram orqali "+CFG.tg+" ga yozing. Click/Payme orqali avtomatik to'lov keyingi bosqichda ulanadi."));
- var d=el("button","sec sm","Sinov uchun +10 000 so'm (demo)");d.onclick=function(){acct.bal+=10000;save();drawTar()};b.appendChild(d);
+ b.appendChild(el("p","note","Balansni to'ldirish: Telegram orqali "+CFG.tg+" ga yozing. Balans to'ldirilgach, bu yerda avtomatik ko'rinadi."));
  var g=$("tgrid");g.textContent="";
  [{id:"free",name:"Bepul",price:0,lim:CFG.free,msgs:CFG.freeMsgs}].concat(CFG.plans).forEach(function(t){
   var c=el("div","pl"+(p&&p.id===t.id?" on":""));c.appendChild(el("b",null,t.name));
@@ -389,9 +424,9 @@ function drawTar(){
   c.appendChild(el("p",null,t.lim+" ta slayd yoki referat / oy\n"+t.msgs+" ta AI savol-javob / oy"));
   if(t.price){var bt=el("button",null,p&&p.id===t.id?"Faol":"Sotib olish");bt.disabled=!!(p&&p.id===t.id);bt.onclick=function(){buy(t)};c.appendChild(bt)}
   g.appendChild(c)})}
-function buy(t){
- if(acct.bal<t.price){$("tmsg").textContent="Balans yetarli emas: "+som(t.price)+" kerak. Avval balansni to'ldiring.";return}
- acct.bal-=t.price;acct.plan={id:t.id,name:t.name,until:Date.now()+30*864e5,used:0,m:0,lim:t.lim,msgs:t.msgs};save();$("tmsg").textContent=t.name+" tarifi 30 kunga yoqildi.";drawTar()}
+async function buy(t){
+ try{setAcct(await rpc("app_buy",{p_plan:t.id}));$("tmsg").textContent=t.name+" tarifi 30 kunga yoqildi.";drawTar()}
+ catch(e){$("tmsg").textContent=e.code==="balance"?"Balans yetarli emas: "+som(t.price)+" kerak. Avval balansni to'ldiring.":"Xatolik yuz berdi. Qayta urinib ko'ring."}}
 
 /* kitoblar */
 function drawBooks(){
@@ -406,7 +441,7 @@ async function genRef(){
  var t=$("rt").value.trim(),rm=$("rm");if(!t){rm.textContent="Avval mavzuni yozing.";return}
  var sm=null;try{sm=await claude.use("sample")}catch(e){}
  if(!sm){rm.textContent="AI hozir mavjud emas.";return}
- if(!spend("referat"))return;
+ if(!(await spend("referat")))return;
  var P=parseInt($("rpg").value,10),S=Math.max(3,Math.min(7,Math.round(P/1.6))),W=Math.round((P*260-400)/S);
  var ctx="Referat mavzusi: "+t+". Fan: "+(sec?sec.name:"Aralash")+". Til: o'zbek (lotin).",fmt="\nOddiy matn yoz: sarlavhasiz, markdown belgilarisiz (#, *), ro'yxatsiz; abzaclar bo'sh qator bilan ajratilsin.";
  $("rgo").disabled=true;$("rdl").disabled=true;
@@ -426,7 +461,7 @@ async function genRef(){
   var rr=await sm(ctx+"\nShu mavzu bo'yicha 5 ta haqiqatan mavjud, mashhur manba (kitob yoki rasmiy hujjat) nomini muallifi bilan yoz, har biri yangi qatorda, raqamsiz. Aniq bilmagan manbani yozma.",{cache:false});
   var ls2=String(rr.text||"").split("\n").map(function(x){return x.replace(/^[\s\-•*\d.)]+/,"").trim()}).filter(Boolean);
   parts.push({h:"Foydalanilgan adabiyotlar",t:ls2.map(function(x,i){return(i+1)+". "+x}).join("\n"),list:true});
-  ref={title:t,parts:parts};showRef();rm.textContent="Referat tayyor. Manbalarni albatta tekshirib chiqing.";$("rdl").disabled=false;
+  ref={title:t,parts:parts};saveHist("referat",t,ref);showRef();rm.textContent="Referat tayyor. Manbalarni albatta tekshirib chiqing.";$("rdl").disabled=false;
  }catch(e){refund();rm.textContent=errText(e)}
  $("rgo").disabled=false}
 function showRef(){var o=$("rout");o.textContent="";o.classList.remove("hide");o.appendChild(el("h3",null,ref.title));
@@ -504,9 +539,9 @@ function init(){
  $("ftg").textContent=CFG.tg;$("ftg").href="https://t.me/"+CFG.tg.replace("@","");$("fph").textContent=CFG.phone;
  drawChips();drawGal();
  document.querySelectorAll(".nv").forEach(function(b){b.onclick=function(){if(acct)go(b.dataset.v)}});
- $("rgoB").onclick=login;$("rph").addEventListener("keydown",function(e){if(e.key==="Enter")login()});$("outB").onclick=logout;
+ $("rgoB").onclick=login;["rph","rpw"].forEach(function(i){$(i).addEventListener("keydown",function(e){if(e.key==="Enter")login()})});$("outB").onclick=logout;
  $("rgo").onclick=genRef;$("rdl").onclick=dlRef;$("bq").addEventListener("input",drawBooks);
- var u=users(),c=ls("sc");if(c&&u[c]){acct=u[c];roll();save();$("ovReg").classList.add("hide");go("vSlide");pick(SECS[6])}}
+ SB.auth.getSession().then(function(r){if(r.data&&r.data.session)enter().catch(function(){})})}
 init();
 $("sendB").onclick=send;
 $("inp").addEventListener("keydown",function(e){if(e.key==="Enter")send()});
