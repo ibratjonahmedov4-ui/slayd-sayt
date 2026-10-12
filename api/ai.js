@@ -34,6 +34,17 @@ module.exports = async function (req, res) {
   const prompt = String((b && b.prompt) || "").slice(0, 12000);
   if (!prompt) return res.status(400).json({ error: "empty" });
 
+  // limit serverda tekshiriladi: slayd/referat yoki AI savol uchun ruxsat (bilet) bo'lishi shart
+  try {
+    const t = await fetch(SB_URL + "/rest/v1/rpc/app_ai_take", {
+      method: "POST",
+      headers: { apikey: SB_KEY, Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: "{}",
+    });
+    if (!t.ok) return res.status(502).json({ error: "quota_check" });
+    if ((await t.json()) !== true) return res.status(402).json({ error: "no_quota" });
+  } catch (e) { return res.status(502).json({ error: "quota_check" }); }
+
   const gen = { temperature: 0.7, maxOutputTokens: 8192 };
   if (b.json) gen.responseMimeType = "application/json";
 
