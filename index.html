@@ -146,7 +146,7 @@ h3{margin:22px 0 10px}
 (function(){
  function post(p,j){return (window.SB?SB.auth.getSession():Promise.resolve({data:{}})).then(function(s){var t=s&&s.data&&s.data.session?s.data.session.access_token:"";
   return fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+t},body:JSON.stringify({prompt:p,json:!!j})})})
-  .then(function(r){return r.json().catch(function(){return{}}).then(function(d){if(!r.ok){var e=new Error(d.error||"xato");e.code=r.status===429?"rate_limited":"error";throw e}return d})})}
+  .then(function(r){return r.json().catch(function(){return{}}).then(function(d){if(!r.ok){var e=new Error(d.error||"xato");e.code=r.status===429?"rate_limited":r.status===402?"limit":"error";throw e}return d})})}
  var sample=function(p){return post(typeof p==="string"?p:JSON.stringify(p),false).then(function(d){return{text:d.text,truncated:false}})};
  sample.json=function(p){return post(p,true).then(function(d){var t=String(d.text||"").replace(/```json|```/g,"").trim();
   try{return JSON.parse(t)}catch(e){var x=new Error("json");x.code="invalid_json";throw x}})};
@@ -221,7 +221,7 @@ function msg(t){$("msg").textContent=t}
 function clampN(){var n=parseInt($("count").value,10);if(isNaN(n)||n<5)n=5;if(n>20)n=20;$("count").value=n;return n}
 function transcript(){return chat.map(function(m){return (m.r==="u"?"Foydalanuvchi: ":"AI: ")+m.t}).join("\n")}
 async function getSample(){var s=null;try{s=await claude.use("sample")}catch(e){}if(!s)msg("AI hozir mavjud emas.");return s}
-function errText(e){return e&&e.code==="rate_limited"?"Ko'p so'rov yuborildi, biroz kuting.":e&&e.code==="not_granted"?"AI ruxsati berilmadi.":"Xatolik yuz berdi. Qayta urinib ko'ring."}
+function errText(e){return e&&e.code==="limit"?"Limit tugadi. Tarif oling yoki balansni to'ldiring.":e&&e.code==="rate_limited"?"Ko'p so'rov yuborildi, biroz kuting.":e&&e.code==="not_granted"?"AI ruxsati berilmadi.":"Xatolik yuz berdi. Qayta urinib ko'ring."}
 
 async function send(){
  var v=$("inp").value.trim();if(!v||busy)return;
@@ -378,7 +378,7 @@ async function login(){
    if(!u.data.session){er.textContent="Hisob yaratildi, ammo Supabase'da «Confirm email» yoqilgan. Uni o'chiring.";b.disabled=false;return}
   }
   await enter();
- }catch(e){er.textContent="Xatolik yuz berdi. Qayta urinib ko'ring."}
+ }catch(e){er.textContent="Xatolik: "+(e&&e.message?e.message:"noma'lum")}
  b.disabled=false}
 async function logout(){await SB.auth.signOut();acct=null;slides=[];ref=null;$("rpw").value="";$("rerr").textContent="";$("ovReg").classList.remove("hide")}
 async function saveHist(kind,topic,content){try{await SB.from("history").insert({kind:kind,subject:sec?sec.name:null,topic:String(topic||"").slice(0,200),content:content})}catch(e){}}
