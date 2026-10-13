@@ -8,6 +8,23 @@ var MODELS = ["gemini-3.5-flash", "gemini-3-flash-preview", "gemini-2.5-flash"];
 if (process.env.GEMINI_MODEL) MODELS.unshift(process.env.GEMINI_MODEL);
 
 var hits = {};
+var lastGood = null;   // oxirgi ishlagan model: keyingi so'rovlarda birinchi shuni sinaymiz
+var noThink = {};      // "o'ylash"ni cheklashni qabul qilmagan modellar
+
+function modelOrder() {
+  if (!lastGood) return MODELS;
+  return [lastGood].concat(MODELS.filter(function (m) { return m !== lastGood; }));
+}
+
+function callModel(m, prompt, gen, key, limitThinking) {
+  var g = Object.assign({}, gen);
+  if (limitThinking) g.thinkingConfig = m.indexOf("2.5") >= 0 ? { thinkingBudget: 0 } : { thinkingLevel: "low" };
+  return fetch("https://generativelanguage.googleapis.com/v1beta/models/" + m + ":generateContent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: g })
+  });
+}
 
 module.exports = async function (req, res) {
   res.setHeader("Cache-Control", "no-store");
@@ -71,16 +88,15 @@ module.exports = async function (req, res) {
   if (body.json) gen.responseMimeType = "application/json";
 
   var status = 502;
-  for (var i = 0; i < MODELS.length; i++) {
+  var order = modelOrder();
+  for (var i = 0; i < order.length; i++) {
+    var m = order[i];
     try {
-      var r = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/" + MODELS[i] + ":generateContent",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: gen })
-        }
-      );
+      var r = await callModel(m, prompt, gen, key, !noThink[m]);
+      if (r.status === 400 && !noThink[m]) {
+        noThink[m] = true;
+        r = await callModel(m, prompt, gen, key, false);
+      }
       if (r.status === 429) return res.status(429).json({ error: "rate_limited" });
       if (!r.ok) { status = r.status; continue; }
       var j = await r.json();
@@ -88,7 +104,7 @@ module.exports = async function (req, res) {
       var parts = (cand.content || {}).parts || [];
       var text = parts.filter(function (p) { return !p.thought; })
         .map(function (p) { return p.text || ""; }).join("");
-      if (text) return res.status(200).json({ text: text });
+      if (text) { lastGood = m; return res.status(200).json({ text: text }); }
     } catch (e) { /* keyingi modelga o'tamiz */ }
   }
   return res.status(status >= 400 && status < 600 ? status : 502).json({ error: "ai_error" });
