@@ -88,23 +88,37 @@ module.exports = async function (req, res) {
   if (body.json) gen.responseMimeType = "application/json";
 
   var status = 502;
-  var order = modelOrder();
-  for (var i = 0; i < order.length; i++) {
-    var m = order[i];
-    try {
-      var r = await callModel(m, prompt, gen, key, !noThink[m]);
-      if (r.status === 400 && !noThink[m]) {
-        noThink[m] = true;
-        r = await callModel(m, prompt, gen, key, false);
-      }
-      if (!r.ok) { status = r.status; continue; }   // 429 bo'lsa ham keyingi modelni sinaymiz
-      var j = await r.json();
-      var cand = (j.candidates || [])[0] || {};
-      var parts = (cand.content || {}).parts || [];
-      var text = parts.filter(function (p) { return !p.thought; })
-        .map(function (p) { return p.text || ""; }).join("");
-      if (text) { lastGood = m; return res.status(200).json({ text: text }); }
-    } catch (e) { /* keyingi modelga o'tamiz */ }
+  var tried = [];
+  for (var pass = 0; pass < 2; pass++) {
+    var order = modelOrder();
+    for (var i = 0; i < order.length; i++) {
+      var m = order[i];
+      try {
+        var r = await callModel(m, prompt, gen, key, !noThink[m]);
+        if (r.status === 400 && !noThink[m]) {
+          noThink[m] = true;
+          r = await callModel(m, prompt, gen, key, false);
+        }
+        tried.push(m.replace("gemini-", "") + ":" + r.status);
+        if (!r.ok) {
+          // 404 ("model topilmadi") eng kam ma'lumotli: haqiqiy sababni (429/503...) saqlab qolamiz
+          if (r.status !== 404 || status === 502) status = r.status;
+          continue;
+        }
+        var j = await r.json();
+        var cand = (j.candidates || [])[0] || {};
+        var parts = (cand.content || {}).parts || [];
+        var text = parts.filter(function (p) { return !p.thought; })
+          .map(function (p) { return p.text || ""; }).join("");
+        if (text) { lastGood = m; return res.status(200).json({ text: text }); }
+        tried.push("bosh");
+      } catch (e) { tried.push(m.replace("gemini-", "") + ":err"); }
+    }
+    // Gemini band yoki chegaraga yetgan bo'lsa, 2 soniya kutib yana bir marta urinamiz
+    if (pass === 0 && (status === 429 || status === 503)) {
+      await new Promise(function (ok) { setTimeout(ok, 2000); });
+    } else break;
   }
-  return res.status(status >= 400 && status < 600 ? status : 502).json({ error: "ai_error" });
+  return res.status(status >= 400 && status < 600 ? status : 502)
+    .json({ error: "ai_error", detail: tried.join(",").slice(0, 120) });
 };
