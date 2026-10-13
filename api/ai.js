@@ -1,71 +1,94 @@
-// Vercel serverless funksiya: brauzer -> bu funksiya -> Gemini. Kalit faqat shu yerda (muhit o'zgaruvchisida) turadi.
-const MODELS = (process.env.GEMINI_MODEL ? [process.env.GEMINI_MODEL] : []).concat(["gemini-3.5-flash", "gemini-3-flash-preview", "gemini-2.5-flash"]);
-const hits = new Map();
+// Vercel funksiyasi: brauzer -> /api/ai -> Gemini.
+// GEMINI_API_KEY faqat Vercel muhit o'zgaruvchisida turadi.
+
+var SB_URL = "https://etjjqwaskuvnxputunyi.supabase.co";
+var SB_KEY = "sb_publishable_rkeCvnQPvf-hALMp3LJNCA_mQ-ic6ES";
+
+var MODELS = ["gemini-3.5-flash", "gemini-3-flash-preview", "gemini-2.5-flash"];
+if (process.env.GEMINI_MODEL) MODELS.unshift(process.env.GEMINI_MODEL);
+
+var hits = {};
 
 module.exports = async function (req, res) {
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "POST") return res.status(405).json({ error: "method" });
-  const key = process.env.GEMINI_API_KEY;
+
+  var key = process.env.GEMINI_API_KEY;
   if (!key) return res.status(500).json({ error: "no_key" });
 
-  // faqat kirgan foydalanuvchilar: Supabase tokenini tekshiramiz
-  const auth = String(req.headers.authorization || "");
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  // 1) Kirgan foydalanuvchi tokeni bo'lishi shart
+  var auth = String(req.headers.authorization || "");
+  var token = auth.indexOf("Bearer ") === 0 ? auth.slice(7) : "";
   if (!token) return res.status(401).json({ error: "no_token" });
-  const SB_URL = "https://etjjqwaskuvnxputunyi.supabase.co";
-  const SB_KEY = "sb_publishable_rkeCvnQPvf-hALMp3LJNCA_mQ-ic6ES";
-  // Tokenning haqiqiyligini Supabase o'zi quyida (app_ai_take) tekshiradi; bu yerda faqat cheklov kaliti uchun o'qiymiz
-  let uid = "";
-  try { uid = String(JSON.parse(Buffer.from(token.split(".")[1], "base64").toString("utf8")).sub || ""); } catch (e) {}
+
+  // 2) Foydalanuvchi bo'yicha daqiqasiga 20 ta so'rov (faqat cheklov kaliti uchun)
+  var uid = "";
+  try {
+    var payload = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString("utf8"));
+    uid = String(payload.sub || "");
+  } catch (e) {}
   if (!uid) uid = token.slice(-24);
+  var now = Date.now();
+  var list = (hits[uid] || []).filter(function (t) { return now - t < 60000; });
+  if (list.length >= 20) return res.status(429).json({ error: "rate_limited" });
+  list.push(now);
+  hits[uid] = list;
 
-  // oddiy himoya: bitta foydalanuvchidan daqiqasiga 20 ta so'rov
-  const now = Date.now();
-  const arr = (hits.get(uid) || []).filter((t) => now - t < 60000);
-  if (arr.length >= 20) return res.status(429).json({ error: "rate_limited" });
-  arr.push(now);
-  hits.set(uid, arr);
-
-  let b = req.body;
-  if (typeof b === "string") { try { b = JSON.parse(b); } catch (e) { b = {}; } }
-  const prompt = String((b && b.prompt) || "").slice(0, 12000);
+  // 3) So'rov matni
+  var body = req.body;
+  if (typeof body === "string") {
+    try { body = JSON.parse(body); } catch (e) { body = {}; }
+  }
+  body = body || {};
+  var prompt = String(body.prompt || "").slice(0, 12000);
   if (!prompt) return res.status(400).json({ error: "empty" });
 
-  // limit serverda tekshiriladi: slayd/referat yoki AI savol uchun ruxsat (bilet) bo'lishi shart
+  // 4) Limit serverda: Supabase tokenni tekshiradi va AI "bileti"ni yechadi
   try {
-    const t = await fetch(SB_URL + "/rest/v1/rpc/app_ai_take", {
+    var q = await fetch(SB_URL + "/rest/v1/rpc/app_ai_take", {
       method: "POST",
       headers: { apikey: SB_KEY, Authorization: "Bearer " + token, "Content-Type": "application/json" },
-      body: "{}",
+      body: "{}"
     });
-    if (t.status === 401 || t.status === 403) {
-      let d = ""; try { d = (await t.text()).slice(0, 200); } catch (e) {}
-      return res.status(401).json({ error: "bad_token", status: t.status, detail: d });
+    if (q.status === 401 || q.status === 403) {
+      var d1 = "";
+      try { d1 = (await q.text()).slice(0, 200); } catch (e) {}
+      return res.status(401).json({ error: "bad_token", status: q.status, detail: d1 });
     }
-    if (!t.ok) {
-      let d = ""; try { d = (await t.text()).slice(0, 200); } catch (e) {}
-      return res.status(502).json({ error: "quota_check", status: t.status, detail: d });
+    if (!q.ok) {
+      var d2 = "";
+      try { d2 = (await q.text()).slice(0, 200); } catch (e) {}
+      return res.status(502).json({ error: "quota_check", status: q.status, detail: d2 });
     }
-    if ((await t.json()) !== true) return res.status(402).json({ error: "no_quota" });
-  } catch (e) { return res.status(502).json({ error: "quota_check" }); }
+    var allowed = await q.json();
+    if (allowed !== true) return res.status(402).json({ error: "no_quota" });
+  } catch (e) {
+    return res.status(502).json({ error: "quota_check" });
+  }
 
-  const gen = { temperature: 0.7, maxOutputTokens: 8192 };
-  if (b.json) gen.responseMimeType = "application/json";
+  // 5) Gemini
+  var gen = { temperature: 0.7, maxOutputTokens: 8192 };
+  if (body.json) gen.responseMimeType = "application/json";
 
-  let status = 502;
-  for (const m of MODELS) {
+  var status = 502;
+  for (var i = 0; i < MODELS.length; i++) {
     try {
-      const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + m + ":generateContent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: gen }),
-      });
+      var r = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/models/" + MODELS[i] + ":generateContent",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: gen })
+        }
+      );
       if (r.status === 429) return res.status(429).json({ error: "rate_limited" });
       if (!r.ok) { status = r.status; continue; }
-      const j = await r.json();
-      const parts = (((j.candidates || [])[0] || {}).content || {}).parts || [];
-      const text = parts.filter((p) => !p.thought).map((p) => p.text || "").join("");
-      if (text) return res.status(200).json({ text });
+      var j = await r.json();
+      var cand = (j.candidates || [])[0] || {};
+      var parts = (cand.content || {}).parts || [];
+      var text = parts.filter(function (p) { return !p.thought; })
+        .map(function (p) { return p.text || ""; }).join("");
+      if (text) return res.status(200).json({ text: text });
     } catch (e) { /* keyingi modelga o'tamiz */ }
   }
   return res.status(status >= 400 && status < 600 ? status : 502).json({ error: "ai_error" });
