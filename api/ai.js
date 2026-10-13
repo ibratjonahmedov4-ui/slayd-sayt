@@ -38,7 +38,7 @@ module.exports = async function (req, res) {
   var token = auth.indexOf("Bearer ") === 0 ? auth.slice(7) : "";
   if (!token) return res.status(401).json({ error: "no_token" });
 
-  // 2) Foydalanuvchi bo'yicha daqiqasiga 20 ta so'rov (faqat cheklov kaliti uchun)
+  // 2) Foydalanuvchi bo'yicha daqiqasiga 40 ta so'rov (faqat cheklov kaliti uchun)
   var uid = "";
   try {
     var payload = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString("utf8"));
@@ -47,7 +47,7 @@ module.exports = async function (req, res) {
   if (!uid) uid = token.slice(-24);
   var now = Date.now();
   var list = (hits[uid] || []).filter(function (t) { return now - t < 60000; });
-  if (list.length >= 20) return res.status(429).json({ error: "rate_limited" });
+  if (list.length >= 40) return res.status(429).json({ error: "rate_limited" });
   list.push(now);
   hits[uid] = list;
 
@@ -97,8 +97,7 @@ module.exports = async function (req, res) {
         noThink[m] = true;
         r = await callModel(m, prompt, gen, key, false);
       }
-      if (r.status === 429) return res.status(429).json({ error: "rate_limited" });
-      if (!r.ok) { status = r.status; continue; }
+      if (!r.ok) { status = r.status; continue; }   // 429 bo'lsa ham keyingi modelni sinaymiz
       var j = await r.json();
       var cand = (j.candidates || [])[0] || {};
       var parts = (cand.content || {}).parts || [];
