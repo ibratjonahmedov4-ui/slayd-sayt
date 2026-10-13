@@ -146,7 +146,7 @@ h3{margin:22px 0 10px}
 (function(){
  function post(p,j){return (window.SB?SB.auth.getSession():Promise.resolve({data:{}})).then(function(s){var t=s&&s.data&&s.data.session?s.data.session.access_token:"";
   return fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+t},body:JSON.stringify({prompt:p,json:!!j})})})
-  .then(function(r){return r.json().catch(function(){return{}}).then(function(d){if(!r.ok){var e=new Error((d.error||"xato")+" "+r.status+(d.detail?" "+String(d.detail).slice(0,80):""));e.code=r.status===429?"rate_limited":r.status===402?"limit":"error";throw e}return d})})}
+  .then(function(r){return r.json().catch(function(){return{}}).then(function(d){if(!r.ok){var e=new Error((d.error||"xato")+" "+r.status+(d.detail?" "+String(d.detail).slice(0,120):""));e.code=r.status===429?"rate_limited":r.status===402?"limit":"error";throw e}return d})})}
  var sample=function(p){return post(typeof p==="string"?p:JSON.stringify(p),false).then(function(d){return{text:d.text,truncated:false}})};
  sample.json=function(p){return post(p,true).then(function(d){var t=String(d.text||"").replace(/```json|```/g,"").trim();
   try{return JSON.parse(t)}catch(e){var x=new Error("json");x.code="invalid_json";throw x}})};
