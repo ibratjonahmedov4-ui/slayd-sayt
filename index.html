@@ -239,15 +239,29 @@ async function send(){
 
 async function generate(){
  if(busy)return;var sm=await getSample();if(!sm)return;
- var n=clampN(),k=n-2;if(!(await spend("slayd")))return;busy=true;$("nowB").disabled=true;msg("Reja va matnlar yozilmoqda... ("+n+" ta slayd)");
- var p="Quyidagi suhbat asosida taqdimot tayyorla. Bo'lim: "+sec.name+" ("+sec.hint+")\nTil: "+$("lang").value+"\nSuhbat:\n"+transcript()+
- "\n\nAniq "+k+" ta mazmun slaydi yoz (oxirgisi xulosa). Har bir slaydda 3-5 ta band, har biri to'liq, ma'noli 1 jumla (10-20 so'z), aniq faktlar bilan. Sarlavhalar qisqa va mantiqli ketma-ketlikda reja bo'lsin. Umumiy sarlavha va 1 qatorli izoh ham yoz.\nFaqat JSON: {\"title\":\"...\",\"subtitle\":\"...\",\"slides\":[{\"title\":\"...\",\"bullets\":[\"...\"]}]}";
+ var n=clampN(),k=n-2;if(!(await spend("slayd")))return;busy=true;$("nowB").disabled=true;
+ var lang=$("lang").value,ctx="Bo'lim: "+sec.name+" ("+sec.hint+")\nTil: "+lang+"\nSuhbat:\n"+transcript();
  try{
-  var r=await sm.json(p,{cache:false,modelTier:"default"});
-  var body=(r.slides||[]).slice(0,k).map(function(s){return{kind:"body",title:String(s.title||""),bullets:(s.bullets||[]).map(String)}});
-  if(!body.length)throw new Error("bo'sh");
-  var rl={"o'zbek (lotin)":"Reja",rus:"План",ingliz:"Agenda"}[$("lang").value];
-  slides=[{kind:"title",title:String(r.title||sec.name),sub:String(r.subtitle||"")},
+  msg("1/3 Reja tuzilmoqda... ("+n+" ta slayd)");
+  var o=await sm.json("Quyidagi suhbat asosida taqdimot rejasini tuz.\n"+ctx+"\n\nAniq "+k+" ta mazmun slaydi uchun qisqa sarlavhalarni mantiqli ketma-ketlikda yoz (oxirgisi xulosa). Umumiy sarlavha va 1 qatorli izoh ham yoz.\nFaqat JSON: {\"title\":\"...\",\"subtitle\":\"...\",\"titles\":[\"...\"]}",{cache:false,modelTier:"quick"});
+  var titles=(o.titles||[]).map(String).slice(0,k);
+  if(!titles.length)throw new Error("bo'sh");
+  var body=titles.map(function(t){return{kind:"body",title:t,bullets:[]}});
+  var done=0,starts=[];for(var a=0;a<titles.length;a+=3)starts.push(a);
+  msg("2/3 Matnlar yozilmoqda... 0/"+titles.length);
+  function part(st){
+   var ts=titles.slice(st,st+3);
+   var q="Taqdimot mavzusi: "+String(o.title||sec.name)+"\n"+ctx+"\n\nQuyidagi "+ts.length+" ta slayd uchun matn yoz. Sarlavhalar (shu tartibda): "+JSON.stringify(ts)+"\nHar bir slaydda 3-5 ta band, har biri to'liq, ma'noli 1 jumla (10-20 so'z), aniq faktlar bilan.\nFaqat JSON: {\"slides\":[{\"bullets\":[\"...\"]}]} (aynan "+ts.length+" ta element, sarlavhalar tartibida)";
+   function run(){return sm.json(q,{cache:false,modelTier:"default"}).then(function(r){
+    var sl=r.slides||[];
+    for(var x=0;x<ts.length;x++){var bl=((sl[x]||{}).bullets||[]).map(String).filter(Boolean);if(!bl.length)throw new Error("bo'sh");body[st+x].bullets=bl}
+   })}
+   return run().catch(function(){return run()}).then(function(){done+=ts.length;msg("2/3 Matnlar yozilmoqda... "+done+"/"+titles.length)});
+  }
+  await Promise.all(starts.map(part));
+  msg("3/3 Slaydlar yig'ilmoqda...");
+  var rl={"o'zbek (lotin)":"Reja",rus:"План",ingliz:"Agenda"}[lang];
+  slides=[{kind:"title",title:String(o.title||sec.name),sub:String(o.subtitle||"")},
    {kind:"body",plan:true,title:rl,bullets:body.map(function(s,i){return (i+1)+". "+s.title})}].concat(body);
   busy=false;msg("");saveHist("slayd",slides[0].title,{slides:slides});$("chatView").classList.add("hide");$("resView").classList.remove("hide");drawThemes();render();
   $("msg2").textContent=slides.length+" ta slayd tayyor. Dizaynni almashtiring yoki istalgan slaydga o'z rasmingizni yuklang.";
