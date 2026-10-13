@@ -256,9 +256,9 @@ async function generate(){
     var sl=r.slides||[];
     for(var x=0;x<ts.length;x++){var bl=((sl[x]||{}).bullets||[]).map(String).filter(Boolean);if(!bl.length)throw new Error("bo'sh");body[st+x].bullets=bl}
    })}
-   return run().catch(function(){return run()}).then(function(){done+=ts.length;msg("2/3 Matnlar yozilmoqda... "+done+"/"+titles.length)});
+   return run().catch(function(){return new Promise(function(ok){setTimeout(ok,5000)}).then(run)}).then(function(){done+=ts.length;msg("2/3 Matnlar yozilmoqda... "+done+"/"+titles.length)});
   }
-  await Promise.all(starts.map(part));
+  var qi=0;await Promise.all([1,2].map(function(){return (async function(){while(qi<starts.length){var st=starts[qi++];await part(st)}})()}));
   msg("3/3 Slaydlar yig'ilmoqda...");
   var rl={"o'zbek (lotin)":"Reja",rus:"План",ingliz:"Agenda"}[lang];
   slides=[{kind:"title",title:String(o.title||sec.name),sub:String(o.subtitle||"")},
